@@ -51,7 +51,14 @@ func (l *Logger) Info(msg string) {
 }
 
 func (l *Logger) Debug(msg string) {
-	l.log.Println(l.formatString(debug, msg, yellow))
+	_, file, line, _ := runtime.Caller(1)
+	tmp := strings.Split(file, "/")
+	f := tmp[len(tmp)- 1]
+
+	errMsg := l.formatString(err, msg, yellow)
+	str := errMsg + yellow + f + ":" + strconv.Itoa(line) + reset
+
+	l.log.Println(str)
 }
 
 func (l *Logger) Testing(msg string) {

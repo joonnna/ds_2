@@ -1,21 +1,18 @@
 package main
 
 import (
+	"github.com/joonnna/ds_2/util"
 	"os/exec"
 	"log"
 	"os"
 	"syscall"
 	"os/signal"
 	"strings"
-	"strconv"
 	"time"
 	"fmt"
+	"runtime"
 )
-/* Ports to use */
-var (
-	http = 2345
-	rpc = 7453
-)
+
 func cleanUp() {
 	cmd := exec.Command("sh", "/share/apps/bin/cleanup.sh")
 	cmd.Run()
@@ -35,13 +32,19 @@ func sshToNode(ip string) {
    nameserver: address of the nameserver, empty if application is the nameserver
    flag: -1 if launching the client
    */
-func launch(nodeName, path, nodeIp)  {
-	var command string
+func launchClient(nodeName, path, nodeIp string)  {
+	command := fmt.Sprintf("go run %s %s,client", path, nodeIp)
 
-	httpPort := ":" + strconv.Itoa(http)
-	rpcPort := ":" + strconv.Itoa(rpc)
+	cmd := exec.Command("ssh", "-T", nodeName, command)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
-	command = "go run " + path + " " + httpPort + "," + rpcPort + "," + " "
+	cmd.Start()
+}
+
+
+func launchNode(nodeName, path, nodeIp string)  {
+	command := fmt.Sprintf("go run %s %s,node", path, nodeIp)
 
 	cmd := exec.Command("ssh", "-T", nodeName, command)
 	cmd.Stdout = os.Stdout
@@ -52,11 +55,28 @@ func launch(nodeName, path, nodeIp)  {
 
 
 func main () {
-	nodeAddr := GetNodeAddr()
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	path := "./go/src/github.com/joonnna/ds_chord/main.go"
+	hostName, _ := os.Hostname()
+	hostName = strings.Split(hostName, ".")[0]
 
-	launch(nodeAddr, path)
+	nodeAddr := util.GetNodeAddr()
+	clientAddr := util.GetNodeAddr()
+
+	//startup := make(chan string)
+
+	path := "./go/src/github.com/joonnna/ds_2/main.go"
+
+	launchNode(nodeAddr, path, "")
+	//go node.Run("", startup)
+	//httpPort := <- startup
+	//fmt.Println("Received port")
+
+	time.Sleep(time.Second * 3)
+
+	address := fmt.Sprintf("%s:%s", nodeAddr, "2000")
+
+	launchClient(clientAddr, path, address)
 
 	/* Wait for CTRL-C then shut all nodes down*/
 	c := make(chan os.Signal)

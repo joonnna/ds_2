@@ -7,12 +7,17 @@ import (
 	"fmt"
 	"os"
 	"io"
+	"strings"
 	"crypto/sha1"
 	"io/ioutil"
 	"github.com/gorilla/mux"
 	"net/http"
-	"github.com/joonnna/ds_chord/node_communication"
+	"net"
+//	"github.com/joonnna/ds_2/node_communication"
+	"os/exec"
 )
+
+
 /* With  Upper Inlcude */
 func InKeySpace(start, end, newId big.Int) bool {
 	startEndCmp := start.Cmp(&end)
@@ -122,35 +127,46 @@ func GetNodeList(nameServer string) ([]string, error)  {
 }
 
 func GetNodeAddr() string {
-	scriptName := "./rocks_list_random_hosts.sh"
+	scriptName := "/home/jmi021/go/src/github.com/joonnna/ds_2/launch/rocks_list_random_hosts.sh"
 	cmd := exec.Command("sh", scriptName, "1")
 
 	nodeAddr, err := cmd.Output()
 	if err != nil {
-		log.Fatal(err)
+		return "Couldn't retrieve node address"
 	}
 
-	return nodeAddr
+	ret := strings.Split(string(nodeAddr), " \n")
+
+	return ret[0]
 }
 
 
-func RpcArgs(key big.Int, value string) shared.Args {
-	args := shared.Args {
-		Key: key,
-		Value: value }
+func FindPort(startPort, endPort int) (net.Listener, int, error) {
 
-	return args
+	port := startPort
+
+	for {
+		listenAddr := fmt.Sprintf(":%d", port)
+		l, err := net.Listen("tcp4", listenAddr)
+		if err == nil {
+			return l, port, nil
+		}
+
+		if port > endPort {
+			return nil, 0, err
+		}
+		port += 1
+	}
 }
 
-
-func CreateArgs(nodeAddr string, nodeId big.Int) shared.Args {
-	n := shared.NodeInfo{
-		Ip: nodeAddr,
-		Id: nodeId }
-
-	args := shared.Args{
-		Node: n }
-
-	return args
+func PingNode(ip, port string) bool {
+	timeout := time.Second * 3
+	addr := fmt.Sprintf("%s:%s", ip, port)
+	conn, err := net.DialTimeout("tcp4", addr, timeout)
+	if err != nil {
+		return true
+	}
+	conn.Close()
+	return false
 }
 

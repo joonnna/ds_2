@@ -1,45 +1,43 @@
 package shared
 
 import(
+	"github.com/joonnna/ds_2/util"
 	"net/rpc"
 	"net"
-	"strings"
+	"time"
+	"fmt"
 )
 
 type Comm struct {
 	Client *rpc.Client
 }
+
+const (
+	startPort = 1025
+	endPort = 9000
+)
+
 /* Inits the rpc server */
-func InitRpcServer(address string, api RPC) (net.Listener, error) {
+func InitRpcServer(address string, api RPC) (net.Listener, int, error) {
 	server := rpc.NewServer()
 	err := server.RegisterName("Node", api)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	t, err := net.ResolveTCPAddr("tcp4", address)
+	l, port, err := util.FindPort(startPort, endPort)
 	if err != nil {
-		return nil, err
-	}
-
-	l, err := net.ListenTCP("tcp4", t)
-	if err != nil {
-		return nil, err
+		return l, 0, err
 	}
 
 	go server.Accept(l)
 
-	return l, nil
+	return l, port, nil
 }
 
 func setupConn(address string, port string) (*Comm, error) {
-	var addr string
-	tmp := strings.Split(address, ":")
-	if len(tmp) == 0 {
-		addr = address + port
-	} else {
-		addr = tmp[0] + port
-	}
+	addr := fmt.Sprintf("%s:%s", address, port)
+
 	client, err := dialNode(addr)
 	if err != nil {
 		return nil, err
@@ -49,12 +47,7 @@ func setupConn(address string, port string) (*Comm, error) {
 }
 
 func dialNode(address string) (*rpc.Client, error) {
-	t, err := net.ResolveTCPAddr("tcp4", address)
-	if err != nil {
-		return nil, err
-	}
-
-	connection, err := net.DialTCP("tcp4", nil, t)
+	connection, err := net.DialTimeout("tcp4", address, time.Second)
 	if err != nil {
 		return nil, err
 	}

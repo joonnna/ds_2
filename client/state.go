@@ -1,4 +1,4 @@
-package node
+package client
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"net/http"
 	"io"
-	"fmt"
+//	"fmt"
 )
 
 type state struct {
@@ -17,87 +17,78 @@ type state struct {
 
 
 /* Periodically sends the nodes current state to the state server*/
-func (n *Node) updateState() {
-
+func (c *Client) updateState(id, next, prev string) {
 	client := &http.Client{}
-//	for {
-	s := n.newState()
-	n.updateReq(s, client)
-//		time.Sleep(time.Second * 1)
 
-//	}
+	s := c.newState(id, next, prev)
+
+	c.updateReq(s, client)
 
 }
 /* Creates a new state */
-func (n *Node) newState() io.Reader {
-	succ := n.getSuccessor()
-	prev := n.getPrev()
-
-	id := fmt.Sprintf("%s:%s", n.info.Ip, n.info.HttpPort)
-	nextId := fmt.Sprintf("%s:%s", succ.Ip, succ.HttpPort)
-	prevId := fmt.Sprintf("%s:%s", prev.Ip, prev.HttpPort)
-
+func (c *Client) newState(id, next, prev string) io.Reader {
 	s := state {
-		Next: nextId,
+		Next: next,
 		ID: id,
-		Prev: prevId }
+		Prev: prev }
 
 	buff := new(bytes.Buffer)
 
 	err := json.NewEncoder(buff).Encode(s)
 	if err != nil {
-		n.logger.Error(err.Error())
+		c.log.Error(err.Error())
 	}
 
 	return bytes.NewReader(buff.Bytes())
 }
 /* Sends the node state to the state server*/
-func (n *Node) updateReq(r io.Reader, c *http.Client) {
+func (c *Client) updateReq(r io.Reader, httpClient *http.Client) {
 	req, err := http.NewRequest("POST", "http://129.242.22.74:7560/update", r)
 	if err != nil {
-		n.logger.Error(err.Error())
+		c.log.Error(err.Error())
 	}
 
-	resp, err := c.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
-		n.logger.Error(err.Error())
+		c.log.Error(err.Error())
 	} else {
 		resp.Body.Close()
 	}
 }
 
 /* Sends a post request to the state server add endpoint */
-func (n *Node) add() {
-	r := n.newState()
+/*
+func (c *Client) add() {
+	r := c.newState()
 	req, err := http.NewRequest("POST", "http://129.242.22.74:7560/add", r)
 	if err != nil {
-		n.logger.Error(err.Error())
+		c.log.Error(err.Error())
 	}
 
 	client := &http.Client{}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		n.logger.Error(err.Error())
+		c.log.Error(err.Error())
 	} else {
 		resp.Body.Close()
 	}
 }
 
-func (n *Node) remove() {
-	r := n.newState()
+func (c *Client) remove() {
+	r := c.newState()
 	req, err := http.NewRequest("POST", "http://129.242.22.74:7560/remove", r)
 	if err != nil {
-		n.logger.Error(err.Error())
+		c.log.Error(err.Error())
 	}
 
 	client := &http.Client{}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		n.logger.Error(err.Error())
+		c.log.Error(err.Error())
 	} else {
 		resp.Body.Close()
 	}
 }
-
+*/

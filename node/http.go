@@ -1,76 +1,87 @@
 package node
 
 import (
-	"github.com/joonnna/ds_chord/util"
-	"github.com/joonnna/ds_chord/chord"
-	"github.com/joonnna/ds_chord/logger"
-	"runtime"
-	"net"
+	"fmt"
 	"net/http"
-	"io/ioutil"
-	"encoding/json"
-	"os"
 	"github.com/gorilla/mux"
 	"time"
 )
 
-func (n *Node) shutDownHandler(w http.ResponseWriter, r *http.Request) {
+const (
+	startPort = 2000
+	endPort = 9000
+)
 
+func (n *Node) shutDownHandler(w http.ResponseWriter, r *http.Request) {
+	n.flagLock.Lock()
+	n.shutdownFlag = true
+	n.flagLock.Unlock()
+
+	n.wg.Wait()
+
+	n.httpListener.Close()
+
+	//Extra caution if some are still not done
+	time.Sleep(time.Second*2)
+
+	n.exitChan <- 1
 }
 
 func (n *Node) addHandler(w http.ResponseWriter, r *http.Request) {
-	addr = n.launchNewNode()
+	n.flagLock.RLock()
+	if n.shutdownFlag {
+		n.flagLock.RUnlock()
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	n.flagLock.RUnlock()
 
-	fmt.Fprintf(w, addr)
+	n.wg.Add(1)
+	addr, err := n.launchNewNode()
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+	} else {
+		fmt.Fprintf(w, addr)
+	}
+	n.wg.Done()
 }
 
 
+func (n *Node) neighbourHandler(w http.ResponseWriter, r *http.Request) {
+	n.flagLock.RLock()
+	if n.shutdownFlag {
+		n.flagLock.RUnlock()
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	n.flagLock.RUnlock()
 
-func (n Node) neighbourHandler(w http.ResponseWriter, r *http.Request) {
+	n.wg.Add(1)
+	succ := n.getSuccessor()
+	prev := n.getPrev()
+	addr1 := fmt.Sprintf("%s:%s", succ.Ip, succ.HttpPort)
+	addr2 := fmt.Sprintf("%s:%s", prev.Ip, prev.HttpPort)
 
-	retString = n.fingerTable.fingers[1].node.Ip + "\n" + n.prev.Ip
+
+	retString := fmt.Sprintf("%s\n%s", addr1, addr2)
 
 	fmt.Fprintf(w, retString)
-
+	n.wg.Done()
 }
 
 /* Responsible for handling http requests*/
 func (n *Node) httpHandler() {
 	r := mux.NewRouter()
-	r.HandleFunc("/addNode", s.addHandler).Methods("POST")
-	r.HandleFunc("/shutdown", s.shutDownHandler).Methods("POST")
-	r.HandleFunc("/neighbours", s.neighbourHandler).Methods("GET")
 
-	l, err := net.Listen("tcp4", n.httpPort)
-	if err != nil {
-		s.log.Error(err.Error())
-		os.Exit(1)
-	}
-	defer l.Close()
+	r.HandleFunc("/addNode", n.addHandler).Methods("POST")
+	r.HandleFunc("/shutdown", n.shutDownHandler).Methods("POST")
+	r.HandleFunc("/neighbours", n.neighbourHandler).Methods("GET")
 
-	err = http.Serve(l, r)
+	defer n.httpListener.Close()
+
+	err := http.Serve(n.httpListener, r)
 	if err != nil {
-		s.log.Error(err.Error())
-		os.Exit(1)
+		n.logger.Error(err.Error())
+		n.logger.Debug("Shutting down http server")
 	}
 }
-
-/* Inits and runs the chord implementation, responsible for handling requests*/
-/*
-func Run(nameServer, httpPort, rpcPort string) {
-	runtime.GOMAXPROCS(runtime.NumCPU())
-	http.DefaultTransport.(*http.Transport).IdleConnTimeout = time.Second * 1
-	http.DefaultTransport.(*http.Transport).MaxIdleConns = 10000
-
-	l := new(logger.Logger)
-	l.Init((os.Stdout), "Storage", 0)
-
-	storage := &Storage{
-		chord: chord.Init(nameServer, httpPort, rpcPort),
-		log: l}
-
-	go storage.chord.Run()
-
-	storage.httpHandler(httpPort)
-}
-*/
